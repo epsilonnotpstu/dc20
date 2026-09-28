@@ -1,0 +1,7 @@
+node_modules
+dist
+.env
+*.local
+uploads/
+storybook-static
+seed-report.json

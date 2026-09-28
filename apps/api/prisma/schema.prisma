@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum StudentStatus {
+  unclaimed
+  active
+  suspended
+  deceased
+}
+
+enum Role {
+  super_admin
+  admin
+  moderator
+  event_manager
+  content_manager
+}
+
+enum Visibility {
+  members
+  only_me
+  admins
+}
+
+enum FieldType {
+  text
+  textarea
+  number
+  date
+  select
+  multiselect
+  phone
+  email
+  url
+  tags
+}
+
+enum FilterUi {
+  dropdown
+  chips
+  search
+  range
+}
+
+model Student {
+  id                 String        @id @default(cuid())
+  collegeRoll        String        @unique
+  name               String
+  photoUrl           String?
+  status             StudentStatus @default(unclaimed)
+  roles              Role[]
+  /// argon2 hash of SSC registration number — the plain number is never stored
+  sscRegHash         String?
+  /// one-time code an admin issues when SSC reg is missing or unknown
+  claimCodeHash      String?
+  claimCodeExpiresAt DateTime?
+  passwordHash       String?
+  failedLogins       Int           @default(0)
+  lockedUntil        DateTime?
+  /// every profile field that is not a fixed column, keyed by FieldDefinition.key
+  data               Json          @default("{}")
+  /// per-field overrides of FieldDefinition.defaultVisibility
+  privacy            Json          @default("{}")
+  hiddenFromDirectory Boolean      @default(false)
+  showOnline         Boolean       @default(true)
+  lastSeenAt         DateTime?
+  claimedAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  sessions      Session[]
+  claimReports  ClaimReport[] @relation("reported")
+  auditLogs     AuditLog[]
+  invitesSent   Invite[]      @relation("inviter")
+  invitesGot    Invite[]      @relation("invitee")
+
+  @@index([status])
+  @@index([name])
+}
+
+model FieldDefinition {
+  id                String     @id @default(cuid())
+  key               String     @unique
+  labelEn           String
+  labelBn           String
+  type              FieldType  @default(text)
+  options           String[]
+  group             String     @default("About")
+  isFilterable      Boolean    @default(false)
+  filterUi          FilterUi   @default(dropdown)
+  isEditableByUser  Boolean    @default(true)
+  defaultVisibility Visibility @default(members)
+  /// users may not change visibility of locked fields (admin decides)
+  visibilityLocked  Boolean    @default(false)
+  /// true for fields imported from the college sheet
+  fromSeed          Boolean    @default(false)
+  order             Int        @default(0)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  /// sha256 of the refresh token
+  tokenHash   String   @unique
+  userAgent   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([studentId])
+}
+
+model ClaimReport {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation("reported", fields: [studentId], references: [id], onDelete: Cascade)
+  contact    String
+  message    String
+  resolvedAt DateTime?
+  createdAt  DateTime @default(now())
+}
+
+model Invite {
+  id        String   @id @default(cuid())
+  inviterId String
+  inviter   Student  @relation("inviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  inviteeId String
+  invitee   Student  @relation("invitee", fields: [inviteeId], references: [id], onDelete: Cascade)
+  channel   String
+  createdAt DateTime @default(now())
+
+  @@index([inviteeId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actor     Student? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  meta      Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

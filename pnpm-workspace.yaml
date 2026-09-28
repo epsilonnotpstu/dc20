@@ -1,0 +1,10 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  argon2: true
+  esbuild: true
+  prisma: true
+  "@prisma/engines": true
+  sharp: true
+  workerd: false
